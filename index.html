@@ -1,0 +1,218 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MEDI ALARM</title>
+<style>
+body {
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#edf4fa;
+  color:#26384a;
+}
+header {
+  background:#0878c9;
+  color:white;
+  padding:22px;
+  text-align:center;
+}
+main {
+  max-width:700px;
+  margin:25px auto;
+  padding:15px;
+}
+.panel {
+  background:white;
+  padding:20px;
+  margin-bottom:18px;
+  border-radius:14px;
+  box-shadow:0 3px 12px #0001;
+}
+.hero {
+  background:linear-gradient(135deg,#0878c9,#20b6d8);
+  color:white;
+  padding:25px;
+  border-radius:14px;
+}
+input {
+  display:block;
+  width:95%;
+  padding:13px;
+  margin:10px 0;
+  border:1px solid #ccd9e5;
+  border-radius:8px;
+}
+button {
+  background:#0878c9;
+  color:white;
+  border:0;
+  padding:12px 18px;
+  border-radius:8px;
+  cursor:pointer;
+}
+.card {
+  background:#f1f8ff;
+  padding:15px;
+  margin:12px 0;
+  border-radius:8px;
+  border-left:5px solid #0878c9;
+}
+</style>
+</head>
+<body>
+<header>
+<h1>💊 MEDI ALARM</h1>
+<p id="clock"></p>
+</header>
+
+<main>
+<div class="hero">
+<h2>Selamat Datang di MEDI ALARM</h2>
+<p>Pengingat minum obat pasien dan keluarga.</p>
+</div>
+
+<section class="panel">
+<h2>👤 Data Pasien</h2>
+<input id="patient" placeholder="Nama pasien">
+<input id="phone" placeholder="Nomor WhatsApp keluarga">
+</section>
+
+<section class="panel">
+<h2>💊 Tambah Jadwal Obat</h2>
+<input id="medicine" placeholder="Nama obat">
+<input id="dose" placeholder="Dosis obat">
+<label>Jam minum obat</label>
+<input id="time" type="time">
+<button onclick="saveMedicine()">Simpan Jadwal</button>
+</section>
+
+<section class="panel">
+<h2>🔔 Jadwal Minum Obat</h2>
+<button onclick="enableAlarm()">Aktifkan Notifikasi</button>
+<div id="schedule">Belum ada jadwal.</div>
+</section>
+
+<section class="panel">
+<h2>📋 Riwayat Minum Obat</h2>
+<div id="history">Belum ada riwayat.</div>
+</section>
+</main>
+
+<footer style="text-align:center;padding:20px">
+MEDI ALARM © 2026
+</footer>
+
+<script>
+let schedules=JSON.parse(localStorage.getItem("mediAlarm")||"[]");
+let history=JSON.parse(localStorage.getItem("mediHistory")||"[]");
+let notified=[];
+
+function clock(){
+document.getElementById("clock").textContent=
+new Date().toLocaleString("id-ID");
+}
+setInterval(clock,1000);
+clock();
+
+function safe(t){
+return String(t).replace(/[&<>"']/g,c=>({
+"&":"&amp;","<":"&lt;",">":"&gt;",
+'"':"&quot;","'":"&#39;"
+})[c]);
+}
+
+function saveMedicine(){
+let patient=document.getElementById("patient").value.trim();
+let phone=document.getElementById("phone").value.trim();
+let medicine=document.getElementById("medicine").value.trim();
+let dose=document.getElementById("dose").value.trim();
+let time=document.getElementById("time").value;
+
+if(!patient||!medicine||!dose||!time){
+alert("Lengkapi data pasien dan obat.");
+return;
+}
+
+schedules.push({patient,phone,medicine,dose,time});
+localStorage.setItem("mediAlarm",JSON.stringify(schedules));
+render();
+alert("Jadwal berhasil disimpan.");
+}
+
+function render(){
+let box=document.getElementById("schedule");
+box.innerHTML=schedules.map((s,i)=>`
+<div class="card">
+<h3>${safe(s.medicine)}</h3>
+<p>Pasien: ${safe(s.patient)}</p>
+<p>Dosis: ${safe(s.dose)}</p>
+<p>Jam: ${safe(s.time)}</p>
+<button onclick="taken(${i})">Sudah Minum</button>
+<button onclick="removeItem(${i})">Hapus</button>
+</div>`).join("")||"Belum ada jadwal.";
+}
+
+function taken(i){
+let s=schedules[i];
+history.unshift({
+medicine:s.medicine,
+patient:s.patient,
+date:new Date().toLocaleString("id-ID")
+});
+localStorage.setItem("mediHistory",JSON.stringify(history));
+renderHistory();
+alert("Minum obat sudah dicatat.");
+}
+
+function removeItem(i){
+if(!confirm("Hapus jadwal?"))return;
+schedules.splice(i,1);
+localStorage.setItem("mediAlarm",JSON.stringify(schedules));
+render();
+}
+
+function renderHistory(){
+document.getElementById("history").innerHTML=
+history.map(h=>`
+<div class="card">
+<b>${safe(h.medicine)}</b>
+<p>${safe(h.patient)}</p>
+<p>${safe(h.date)}</p>
+</div>`).join("")||"Belum ada riwayat.";
+}
+
+async function enableAlarm(){
+if(!("Notification" in window)){
+alert("Browser tidak mendukung notifikasi.");
+return;
+}
+let permission=await Notification.requestPermission();
+alert(permission==="granted"?"Notifikasi aktif.":"Izin belum diberikan.");
+}
+
+function checkAlarm(){
+if(!("Notification" in window)||
+Notification.permission!=="granted")return;
+let now=new Date();
+let time=String(now.getHours()).padStart(2,"0")+":"+
+String(now.getMinutes()).padStart(2,"0");
+
+schedules.forEach((s,i)=>{
+let key=now.toDateString()+"-"+i;
+if(s.time===time&&!notified.includes(key)){
+notified.push(key);
+new Notification("MEDI ALARM - Waktunya Minum Obat",{
+body:s.patient+": "+s.medicine+" - "+s.dose
+});
+}
+});
+}
+
+setInterval(checkAlarm,10000);
+render();
+renderHistory();
+</script>
+</body>
+</html>
